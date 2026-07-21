@@ -381,6 +381,9 @@ Common::String AgentBridge::buildObservationJSON() {
 	}
 	root.setVal("inventory", new Common::JSONValue(inventoryJSON));
 	root.setVal("held_item", jsonInteger(scene.getHeldItem()));
+	// Difficulty is a player-selected, currently knowable setting rather than
+	// hidden script state. Nancy 3+ uses 0 for Junior and 1 for Senior.
+	root.setVal("difficulty", jsonInteger(scene.getDifficulty()));
 
 	Common::JSONArray affordances;
 	for (uint index = 0; index < records.size(); ++index) {
