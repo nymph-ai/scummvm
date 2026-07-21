@@ -402,10 +402,23 @@ Common::String AgentBridge::buildObservationJSON() {
 		}
 
 		const Common::Rect screenRect = scene.getViewport().convertViewportToScreen(record->_hotspot);
+		Common::String description = record->_description;
+		// Nancy 11's player challenge buttons are visibly labeled on the
+		// rendered book, but their action records contain only generic names.
+		// Preserve affordance-mode parity with what a human can read without
+		// exposing the flags or scene changes behind the buttons.
+		if (g_nancy->getGameType() == kGameTypeNancy11 && sceneInfo.sceneID == 0) {
+			if (index == 32)
+				description = "Gameplay Overview";
+			else if (index == 34)
+				description = "Junior Detective";
+			else if (index == 35)
+				description = "Senior Detective";
+		}
 		Common::JSONObject affordance;
 		affordance.setVal("id", new Common::JSONValue(Common::String::format("hs_%u_%u", sceneInfo.sceneID, index)));
 		affordance.setVal("kind", new Common::JSONValue(cursorName(record->getHoverCursor())));
-		affordance.setVal("description", new Common::JSONValue(record->_description));
+		affordance.setVal("description", new Common::JSONValue(description));
 		affordance.setVal("record_type", new Common::JSONValue(record->getRecordTypeName()));
 		affordance.setVal("cursor", jsonInteger(record->getHoverCursor()));
 		affordance.setVal("hotspot", jsonRect(record->_hotspot));
