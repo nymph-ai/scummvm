@@ -67,6 +67,10 @@ class CursorManager;
 class NancyConsole;
 class DeferredLoader;
 
+namespace Agent {
+class AgentBridge;
+}
+
 namespace State {
 class State;
 }
@@ -107,6 +111,7 @@ public:
 	void setMouseEnabled(bool enabled);
 
 	void addDeferredLoader(Common::SharedPtr<DeferredLoader> &loaderPtr);
+	Agent::AgentBridge *getAgentBridge() const { return _agentBridge; }
 
 	// The first few games used 1/2 for false/true in
 	// inventory, logic conditions, and event flags
@@ -164,6 +169,7 @@ private:
 	const NancyGameDescription *_gameDescription;
 
 	Common::Array<Common::WeakPtr<DeferredLoader>> _deferredLoaderObjects;
+	Agent::AgentBridge *_agentBridge;
 };
 
 extern NancyEngine *g_nancy;

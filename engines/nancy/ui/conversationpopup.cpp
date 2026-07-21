@@ -339,5 +339,38 @@ void ConversationPopup::handleInput(NancyInput &input) {
 	}
 }
 
+bool ConversationPopup::prepareResponseClickPoint(uint responseIndex, Common::Point &point) {
+	const uint hotspotIndex = _responseStartIdx + responseIndex;
+	if (hotspotIndex >= _hotspots.size())
+		return false;
+
+	const Common::Rect localTextRect = getLocalTextRect();
+	const uint16 inner = getInnerHeight();
+	const uint16 outer = localTextRect.height();
+	const int maxScroll = inner > outer ? inner - outer : 0;
+	int scrollY = maxScroll ? (int)(_scrollPos * maxScroll) : 0;
+
+	Common::Rect hotspot = _hotspots[hotspotIndex];
+	hotspot.translate(localTextRect.left, localTextRect.top - scrollY);
+	Common::Rect visible = convertToScreen(hotspot).findIntersectingRect(convertToScreen(localTextRect));
+	if (visible.isEmpty() && maxScroll) {
+		const Common::Rect &unscrolled = _hotspots[hotspotIndex];
+		const int target = CLIP<int>(unscrolled.top + unscrolled.height() / 2 - outer / 2, 0, maxScroll);
+		_scrollPos = (float)target / maxScroll;
+		scrollY = target;
+		redrawScroll();
+
+		hotspot = unscrolled;
+		hotspot.translate(localTextRect.left, localTextRect.top - scrollY);
+		visible = convertToScreen(hotspot).findIntersectingRect(convertToScreen(localTextRect));
+	}
+	if (visible.isEmpty())
+		return false;
+
+	point.x = visible.left + visible.width() / 2;
+	point.y = visible.top + visible.height() / 2;
+	return true;
+}
+
 } // End of namespace UI
 } // End of namespace Nancy

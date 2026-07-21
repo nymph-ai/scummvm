@@ -42,6 +42,7 @@ public:
 	virtual ~HypertextParser() {};
 
 	bool hasBeenDrawn() const { return !_needsTextRedraw; }
+	const Common::Array<Common::String> &getTextLines() const { return _textLines; }
 
 protected:
 	void initSurfaces(uint width, uint height, const struct Graphics::PixelFormat &format, uint32 backgroundColor, uint32 highlightBackgroundColor);

@@ -50,6 +50,13 @@ public:
 	virtual bool isVideoDonePlaying() { return true; }
 	bool isViewportRelative() const override { return true; }
 
+	// Agent-facing dialogue data is limited to text already presented to the
+	// player. Response indices are the visible UI order, not script indices.
+	bool isWaitingForResponse();
+	const Common::String &getCaptionText() const { return _text; }
+	uint getVisibleResponseCount() const;
+	const Common::String &getVisibleResponseText(uint index) const;
+
 protected:
 	struct ConversationFlag {
 		byte type;

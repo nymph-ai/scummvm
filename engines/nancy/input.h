@@ -85,12 +85,16 @@ public:
 	InputManager() :
 		_inputs(0),
 		_mouseEnabled(true),
-		_inputBeginState(NancyState::kNone) {}
+		_inputBeginState(NancyState::kNone),
+		_hasSyntheticInput(false),
+		_agentExclusive(false) {}
 
 	void processEvents();
 
-	NancyInput getInput() const;
+	NancyInput getInput();
 	void forceCleanInput();
+	void queueSyntheticInput(const NancyInput &input);
+	void setAgentExclusive(bool enabled) { _agentExclusive = enabled; }
 	void setMouseInputEnabled(bool enabled) { _mouseEnabled = enabled; }
 	void setKeymapEnabled(Common::String keymapName, bool enabled);
 	void setVKEnabled(bool enabled);
@@ -104,6 +108,9 @@ private:
 	Common::Array<Common::KeyState> _otherKbdInput;
 	bool _mouseEnabled;
 	NancyState::NancyState _inputBeginState;
+	NancyInput _syntheticInput;
+	bool _hasSyntheticInput;
+	bool _agentExclusive;
 };
 
 } // End of namespace Nancy

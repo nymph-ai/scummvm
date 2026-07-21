@@ -1,6 +1,7 @@
 MODULE := engines/nancy
 
 MODULE_OBJS = \
+  agentbridge.o \
   action/actionmanager.o \
   action/actionrecord.o \
   action/actionzone.o \
