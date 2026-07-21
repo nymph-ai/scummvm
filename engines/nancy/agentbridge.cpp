@@ -205,19 +205,27 @@ void AgentTransport::poll(Common::Array<Common::String> &lines) {
 	if (_client == ENET_SOCKET_NULL)
 		return;
 
-	char buffer[4096];
-	ENetBuffer receiveBuffer;
-	receiveBuffer.data = buffer;
-	receiveBuffer.dataLength = sizeof(buffer);
-	const int received = enet_socket_receive(_client, nullptr, &receiveBuffer, 1);
-	if (received == 0) {
+	enet_uint32 receiveCondition = ENET_SOCKET_WAIT_RECEIVE;
+	if (enet_socket_wait(_client, &receiveCondition, 0) < 0) {
 		enet_socket_destroy(_client);
 		_client = ENET_SOCKET_NULL;
 		_input.clear();
 		_output.clear();
 		return;
 	}
-	if (received > 0) {
+	if (receiveCondition & ENET_SOCKET_WAIT_RECEIVE) {
+		char buffer[4096];
+		ENetBuffer receiveBuffer;
+		receiveBuffer.data = buffer;
+		receiveBuffer.dataLength = sizeof(buffer);
+		const int received = enet_socket_receive(_client, nullptr, &receiveBuffer, 1);
+		if (received <= 0) {
+			enet_socket_destroy(_client);
+			_client = ENET_SOCKET_NULL;
+			_input.clear();
+			_output.clear();
+			return;
+		}
 		_input += Common::String(buffer, received);
 		if (_input.size() > kMaximumMessageSize) {
 			enet_socket_destroy(_client);
