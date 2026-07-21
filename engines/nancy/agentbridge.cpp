@@ -681,8 +681,8 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 	_actionWaitForScene = false;
 	_activationRecordIndex = -1;
 	_activationPanRemaining = 0;
-	if (g_nancy->getState() == NancyState::kMainMenu && action != "activate" && action != "wait") {
-		sendError(requestID, "unavailable_action", "Only current main-menu affordances may be activated");
+	if (g_nancy->getState() == NancyState::kMainMenu && action != "activate" && action != "load" && action != "wait") {
+		sendError(requestID, "unavailable_action", "This action is unavailable at the main menu");
 		delete rootValue;
 		return;
 	}
@@ -784,12 +784,14 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 		}
 	} else if (action == "load") {
 		const int slot = jsonInt(object, "slot", -1);
+		const bool loadFromMainMenu = g_nancy->getState() == NancyState::kMainMenu;
 		if (!g_nancy->canLoadGameStateCurrently() || slot < 0 || slot > g_nancy->getMetaEngine()->getMaximumSaveSlot() ||
 			g_nancy->loadGameState(slot).getCode() != Common::kNoError) {
 			sendError(requestID, "load_failed", "Could not load the requested save slot");
 			delete rootValue;
 			return;
 		}
+		_actionWaitForScene = loadFromMainMenu;
 	} else if (action != "wait") {
 		sendError(requestID, "unknown_action", "Unsupported action");
 		delete rootValue;
