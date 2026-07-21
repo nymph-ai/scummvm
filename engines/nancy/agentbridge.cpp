@@ -716,7 +716,8 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 					break;
 				}
 			}
-			if (recordIndex < 0 || !records[recordIndex] || !records[recordIndex]->_isActive) {
+			if (recordIndex < 0 || !records[recordIndex] || !records[recordIndex]->_isActive ||
+				records[recordIndex]->_isDone || !records[recordIndex]->_hasHotspot) {
 				sendError(requestID, "invalid_target", "Target is not a current active affordance");
 				delete rootValue;
 				return;
