@@ -261,7 +261,7 @@ void AgentTransport::sendLine(const Common::String &line) {
 
 AgentBridge::AgentBridge() :
 		_transport(new AgentTransport()), _tick(0), _clientWasConnected(false),
-		_actionPending(false), _actionInputQueued(false), _actionIssuedTick(0),
+		_actionPending(false), _actionInputQueued(false), _actionWaitForScene(false), _actionIssuedTick(0),
 		_settleFrames(0), _activationRecordIndex(-1), _activationPanRemaining(0) {}
 
 AgentBridge::~AgentBridge() {
@@ -287,7 +287,13 @@ bool AgentBridge::StateDigest::operator==(const StateDigest &other) const {
 }
 
 bool AgentBridge::isStableDecisionPoint() const {
-	if (!g_nancy || g_nancy->getState() != NancyState::kScene || !State::Scene::hasInstance())
+	if (!g_nancy)
+		return false;
+	if (g_nancy->getState() == NancyState::kMainMenu) {
+		const MENU *menu = GetEngineData(MENU);
+		return menu != nullptr;
+	}
+	if (g_nancy->getState() != NancyState::kScene || !State::Scene::hasInstance())
 		return false;
 
 	State::Scene &scene = State::Scene::instance();
@@ -298,6 +304,10 @@ bool AgentBridge::isStableDecisionPoint() const {
 
 	Action::ConversationSound *conversation = scene.getActiveConversation();
 	return !conversation || conversation->isWaitingForResponse();
+}
+
+bool AgentBridge::isObservationPoint() const {
+	return isStableDecisionPoint() || (g_nancy && g_nancy->getState() == NancyState::kCredits);
 }
 
 AgentBridge::StateDigest AgentBridge::buildDigest() const {
@@ -320,6 +330,11 @@ AgentBridge::StateDigest AgentBridge::buildDigest() const {
 }
 
 Common::String AgentBridge::buildObservationJSON() {
+	if (g_nancy->getState() == NancyState::kMainMenu)
+		return buildMainMenuObservationJSON();
+	if (g_nancy->getState() == NancyState::kCredits)
+		return buildCreditsObservationJSON();
+
 	State::Scene &scene = State::Scene::instance();
 	const SceneChangeDescription &sceneInfo = scene.getSceneInfo();
 	Action::ConversationSound *conversation = scene.getActiveConversation();
@@ -414,9 +429,108 @@ Common::String AgentBridge::buildObservationJSON() {
 	return value.stringify();
 }
 
+Common::String AgentBridge::buildMainMenuObservationJSON() {
+	Common::JSONObject root;
+	root.setVal("type", new Common::JSONValue("observation"));
+	root.setVal("protocol", new Common::JSONValue("nancy-agent-v1"));
+	root.setVal("tick", jsonInteger(_tick));
+	root.setVal("exposure", new Common::JSONValue("affordance"));
+	root.setVal("mode", new Common::JSONValue("main_menu"));
+	root.setVal("settled", new Common::JSONValue(true));
+	root.setVal("input_locked", new Common::JSONValue(false));
+
+	Common::JSONObject scene;
+	scene.setVal("id", jsonInteger(-1));
+	scene.setVal("description", new Common::JSONValue("Main menu"));
+	scene.setVal("pan_frame", jsonInteger(0));
+	scene.setVal("pan_frames", jsonInteger(0));
+	scene.setVal("panning_type", jsonInteger(0));
+	root.setVal("scene", new Common::JSONValue(scene));
+
+	root.setVal("inventory", new Common::JSONValue(Common::JSONArray()));
+	root.setVal("held_item", jsonInteger(-1));
+	Common::JSONArray affordances;
+	const MENU *menu = GetEngineData(MENU);
+	if (menu && menu->_buttonDests.size() > 1) {
+		Common::JSONObject affordance;
+		affordance.setVal("id", new Common::JSONValue("main_menu:new_game"));
+		affordance.setVal("kind", new Common::JSONValue("start"));
+		affordance.setVal("description", new Common::JSONValue("Start a new game"));
+		affordance.setVal("record_type", new Common::JSONValue("MainMenuButton"));
+		affordance.setVal("cursor", jsonInteger(CursorManager::kHotspotArrow));
+		affordance.setVal("hotspot", jsonRect(menu->_buttonDests[1]));
+		affordance.setVal("screen_hotspot", jsonRect(menu->_buttonDests[1]));
+		affordance.setVal("visible", new Common::JSONValue(true));
+		affordances.push_back(new Common::JSONValue(affordance));
+	}
+	root.setVal("affordances", new Common::JSONValue(affordances));
+
+	Common::JSONObject dialogue;
+	dialogue.setVal("choices", new Common::JSONValue(Common::JSONArray()));
+	root.setVal("dialogue", new Common::JSONValue(dialogue));
+	root.setVal("textbox", new Common::JSONValue(Common::JSONArray()));
+	root.setVal("screenshot_id", new Common::JSONValue(Common::String::format("frame-%llu",
+		(unsigned long long)_tick)));
+
+	Common::JSONValue value(root);
+	return value.stringify();
+}
+
+Common::String AgentBridge::buildCreditsObservationJSON() {
+	Common::JSONObject root;
+	root.setVal("type", new Common::JSONValue("observation"));
+	root.setVal("protocol", new Common::JSONValue("nancy-agent-v1"));
+	root.setVal("tick", jsonInteger(_tick));
+	root.setVal("exposure", new Common::JSONValue("affordance"));
+	root.setVal("mode", new Common::JSONValue("credits"));
+	root.setVal("settled", new Common::JSONValue(true));
+	root.setVal("input_locked", new Common::JSONValue(true));
+	root.setVal("terminal", new Common::JSONValue(true));
+
+	Common::JSONObject scene;
+	const StateDigest digest = buildDigest();
+	const uint16 lastSceneID = _beforeAction.sceneID ? _beforeAction.sceneID : digest.sceneID;
+	scene.setVal("id", jsonInteger(lastSceneID));
+	scene.setVal("description", new Common::JSONValue("Credits"));
+	scene.setVal("pan_frame", jsonInteger(0));
+	scene.setVal("pan_frames", jsonInteger(0));
+	scene.setVal("panning_type", jsonInteger(0));
+	root.setVal("scene", new Common::JSONValue(scene));
+	root.setVal("inventory", new Common::JSONValue(Common::JSONArray()));
+	root.setVal("held_item", jsonInteger(-1));
+	root.setVal("affordances", new Common::JSONValue(Common::JSONArray()));
+	Common::JSONObject dialogue;
+	dialogue.setVal("choices", new Common::JSONValue(Common::JSONArray()));
+	root.setVal("dialogue", new Common::JSONValue(dialogue));
+	root.setVal("textbox", new Common::JSONValue(Common::JSONArray()));
+	root.setVal("screenshot_id", new Common::JSONValue(Common::String::format("frame-%llu",
+		(unsigned long long)_tick)));
+
+	Common::JSONValue value(root);
+	return value.stringify();
+}
+
 void AgentBridge::publishObservation(bool force) {
-	if (!isStableDecisionPoint() || !_transport->hasClient())
+	if (!isObservationPoint() || !_transport->hasClient())
 		return;
+	if (g_nancy->getState() == NancyState::kMainMenu) {
+		const Common::String fingerprint = "main_menu:new_game";
+		if (force || fingerprint != _lastObservationDigest) {
+			_transport->sendLine(buildMainMenuObservationJSON());
+			_lastObservationDigest = fingerprint;
+		}
+		return;
+	}
+	if (g_nancy->getState() == NancyState::kCredits) {
+		const Common::String fingerprint = "terminal:credits";
+		if (force || fingerprint != _lastObservationDigest) {
+			if (fingerprint != _lastObservationDigest)
+				sendEvent("credits_entered");
+			_transport->sendLine(buildCreditsObservationJSON());
+			_lastObservationDigest = fingerprint;
+		}
+		return;
+	}
 	const StateDigest digest = buildDigest();
 	Common::String fingerprint = Common::String::format("%u:%u:%d:%s", digest.sceneID,
 		digest.frameID, digest.heldItem, digest.inventory.c_str());
@@ -504,12 +618,12 @@ void AgentBridge::handleLine(const Common::String &line) {
 	Common::JSONObject object = value->asObject();
 	const Common::String type = jsonString(object, "type");
 	if (type == "observe") {
-		if (!isStableDecisionPoint())
+		if (!isObservationPoint())
 			sendError(jsonString(object, "request_id"), "not_settled", "The engine is not at a decision point");
 		else
 			publishObservation(true);
 	} else if (type == "screenshot") {
-		if (!isStableDecisionPoint())
+		if (!isObservationPoint())
 			sendError(jsonString(object, "request_id"), "not_settled", "The engine is not at a decision point");
 		else
 			sendScreenshot(jsonString(object, "request_id"));
@@ -564,31 +678,58 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 	_beforeAction = buildDigest();
 	_actionName = action;
 	_actionInputQueued = true;
+	_actionWaitForScene = false;
 	_activationRecordIndex = -1;
 	_activationPanRemaining = 0;
+	if (g_nancy->getState() == NancyState::kMainMenu && action != "activate" && action != "wait") {
+		sendError(requestID, "unavailable_action", "Only current main-menu affordances may be activated");
+		delete rootValue;
+		return;
+	}
 
 	if (action == "activate") {
 		const Common::String target = jsonString(object, "target");
-		State::Scene &scene = State::Scene::instance();
-		Common::Array<Action::ActionRecord *> &records = scene.getActionManager().getActionRecords();
-		int recordIndex = -1;
-		for (uint i = 0; i < records.size(); ++i) {
-			if (target == Common::String::format("hs_%u_%u", scene.getSceneInfo().sceneID, i)) {
-				recordIndex = i;
-				break;
+		if (g_nancy->getState() == NancyState::kMainMenu) {
+			const MENU *menu = GetEngineData(MENU);
+			if (target != "main_menu:new_game" || !menu || menu->_buttonDests.size() <= 1) {
+				sendError(requestID, "invalid_target", "Target is not a current active affordance");
+				delete rootValue;
+				return;
+			}
+			const Common::Rect &hotspot = menu->_buttonDests[1];
+			NancyInput input;
+			input.mousePos = Common::Point(hotspot.left + hotspot.width() / 2,
+				hotspot.top + hotspot.height() / 2);
+			input.input = NancyInput::kLeftMouseButtonUp;
+			g_nancy->_input->queueSyntheticInput(input);
+			_actionWaitForScene = true;
+		} else {
+			State::Scene &scene = State::Scene::instance();
+			Common::Array<Action::ActionRecord *> &records = scene.getActionManager().getActionRecords();
+			int recordIndex = -1;
+			for (uint i = 0; i < records.size(); ++i) {
+				if (target == Common::String::format("hs_%u_%u", scene.getSceneInfo().sceneID, i)) {
+					recordIndex = i;
+					break;
+				}
+			}
+			if (recordIndex < 0 || !records[recordIndex] || !records[recordIndex]->_isActive) {
+				sendError(requestID, "invalid_target", "Target is not a current active affordance");
+				delete rootValue;
+				return;
+			}
+			if (!queueActivation(recordIndex)) {
+				_activationRecordIndex = recordIndex;
+				_activationPanRemaining = scene.getViewport().getFrameCount();
+				_actionInputQueued = false;
 			}
 		}
-		if (recordIndex < 0 || !records[recordIndex] || !records[recordIndex]->_isActive) {
-			sendError(requestID, "invalid_target", "Target is not a current active affordance");
+	} else if (action == "pan") {
+		if (g_nancy->getState() != NancyState::kScene) {
+			sendError(requestID, "unavailable_action", "This action is unavailable outside a scene");
 			delete rootValue;
 			return;
 		}
-		if (!queueActivation(recordIndex)) {
-			_activationRecordIndex = recordIndex;
-			_activationPanRemaining = scene.getViewport().getFrameCount();
-			_actionInputQueued = false;
-		}
-	} else if (action == "pan") {
 		const Common::String direction = jsonString(object, "direction");
 		NancyInput input;
 		input.mousePos = g_nancy->getEventManager()->getMousePos();
@@ -671,6 +812,17 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 void AgentBridge::advancePendingAction() {
 	if (!_actionPending)
 		return;
+	if (_tick <= _actionIssuedTick)
+		return;
+	if (g_nancy->getState() == NancyState::kCredits) {
+		completePendingAction(buildDigest(), true);
+		return;
+	}
+	if (_actionWaitForScene) {
+		if (g_nancy->getState() != NancyState::kScene)
+			return;
+		_actionWaitForScene = false;
+	}
 
 	if (!_actionInputQueued) {
 		if (!isStableDecisionPoint())
@@ -691,7 +843,7 @@ void AgentBridge::advancePendingAction() {
 		return;
 	}
 
-	if (_tick <= _actionIssuedTick || !isStableDecisionPoint()) {
+	if (!isStableDecisionPoint()) {
 		_settleFrames = 0;
 		return;
 	}
@@ -707,12 +859,13 @@ void AgentBridge::advancePendingAction() {
 		completePendingAction(digest);
 }
 
-void AgentBridge::completePendingAction(const StateDigest &after) {
+void AgentBridge::completePendingAction(const StateDigest &after, bool terminal) {
 	Common::JSONObject result;
 	result.setVal("scene_changed", new Common::JSONValue(_beforeAction.sceneID != after.sceneID));
 	result.setVal("pan_changed", new Common::JSONValue(_beforeAction.frameID != after.frameID));
 	result.setVal("inventory_changed", new Common::JSONValue(_beforeAction.inventory != after.inventory));
 	result.setVal("held_item_changed", new Common::JSONValue(_beforeAction.heldItem != after.heldItem));
+	result.setVal("terminal", new Common::JSONValue(terminal));
 
 	Common::JSONObject root;
 	root.setVal("type", new Common::JSONValue("action_completed"));
@@ -725,6 +878,7 @@ void AgentBridge::completePendingAction(const StateDigest &after) {
 
 	_actionPending = false;
 	_actionInputQueued = false;
+	_actionWaitForScene = false;
 	_settleFrames = 0;
 	publishObservation(true);
 }
