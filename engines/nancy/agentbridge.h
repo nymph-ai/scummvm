@@ -48,15 +48,18 @@ private:
 	};
 
 	bool isStableDecisionPoint() const;
+	bool isObservationPoint() const;
 	StateDigest buildDigest() const;
 	Common::String buildObservationJSON();
+	Common::String buildMainMenuObservationJSON();
+	Common::String buildCreditsObservationJSON();
 	void publishObservation(bool force = false);
 	void sendScreenshot(const Common::String &requestID);
 	void handleLine(const Common::String &line);
 	void handleAction(Common::JSONValue *root);
 	void advancePendingAction();
 	bool queueActivation(uint recordIndex);
-	void completePendingAction(const StateDigest &after);
+	void completePendingAction(const StateDigest &after, bool terminal = false);
 	void sendError(const Common::String &requestID, const Common::String &code,
 		const Common::String &message);
 	void sendEvent(const Common::String &eventType, const Common::String &detail = Common::String());
@@ -68,6 +71,7 @@ private:
 
 	bool _actionPending;
 	bool _actionInputQueued;
+	bool _actionWaitForScene;
 	uint64 _actionIssuedTick;
 	Common::String _actionID;
 	Common::String _actionName;
