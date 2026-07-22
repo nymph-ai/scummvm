@@ -310,7 +310,7 @@ bool AgentBridge::isStableDecisionPoint() const {
 
 	State::Scene &scene = State::Scene::instance();
 	if (scene.getState() != State::Scene::kRun || scene.isUIPrepActive() ||
-		scene.isRunningAd() || scene.getActiveMovie()) {
+		scene.isRunningAd() || scene.getActiveMovie() || scene.getCellPhonePopup().isAgentBusy()) {
 		return false;
 	}
 
