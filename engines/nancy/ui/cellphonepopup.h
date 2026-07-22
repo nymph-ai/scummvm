@@ -48,6 +48,7 @@ public:
 	void close();
 	void toggle() { if (_isVisible) close(); else open(); }
 	bool isOpen() const { return _isVisible; }
+	bool isAgentBusy() const;
 	void getAgentControls(Common::Array<AgentControl> &controls) const;
 	Common::String getAgentState() const;
 	void getAgentTextLines(Common::Array<Common::String> &lines) const;

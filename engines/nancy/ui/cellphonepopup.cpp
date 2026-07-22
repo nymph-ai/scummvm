@@ -1817,6 +1817,12 @@ Common::String CellPhonePopup::getAgentState() const {
 	return out;
 }
 
+bool CellPhonePopup::isAgentBusy() const {
+	return _isVisible && (_screenState == kPlaceCall || _screenState == kWaitOutgoingRing ||
+		_screenState == kLookupContact || _screenState == kWaitPickup || _screenState == kConnected ||
+		_screenState == kInvalidNumber || _screenState == kWaitInvalid);
+}
+
 void CellPhonePopup::getAgentTextLines(Common::Array<Common::String> &lines) const {
 	if (!_isVisible || !_uiclData)
 		return;
