@@ -37,6 +37,15 @@ namespace Nancy {
 
 class NancyEngine;
 
+// A currently visible, human-clickable control exposed by the structured
+// agent bridge. The rectangle is in screen coordinates unless the owning
+// ActionRecord documents that it is viewport-relative.
+struct AgentControl {
+	Common::String id;
+	Common::String description;
+	Common::Rect hotspot;
+};
+
 // The original engine used a large amount of #defines for numerical constants,
 // which can be found listed inside the gameflow.h file shipping with many of
 // the titles (the Russian variant of nancy1 has it as a separate file, while

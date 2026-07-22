@@ -79,6 +79,38 @@ void Taskbar::registerGraphics() {
 	setVisible(true);
 }
 
+void Taskbar::getAgentControls(Common::Array<AgentControl> &controls) const {
+	const TASK *taskData = GetEngineData(TASK);
+	if (!taskData || _popupLockout)
+		return;
+
+	for (uint i = 0; i < TASK::kNumButtons; ++i) {
+		if (!isButtonActive(i) || isMoneyDisplay(i))
+			continue;
+		AgentControl control;
+		control.id = Common::String::format("button_%u", i);
+		if (i == kTaskButtonMenu)
+			control.description = "open menu";
+		else if (i == kTaskButtonInventory)
+			control.description = "open inventory";
+		else if (i == kTaskButtonNotebook)
+			control.description = "open notebook";
+		else if (i == kTaskButtonCellphone)
+			control.description = "open cell phone";
+		else
+			control.description = "open help";
+		for (uint s = 0; s < kNumNotificationSubCategories; ++s) {
+			if (_notifications[i][s]) {
+				control.description += " (new content)";
+				break;
+			}
+		}
+		control.hotspot = taskData->buttons[i].button.destRect;
+		if (control.hotspot.isValidRect())
+			controls.push_back(control);
+	}
+}
+
 // "NO_UI_ITEM" marks an absent button slot — e.g. Nancy12's removed cell phone,
 // whose on-screen position the coin purse occupies instead. Such slots are neither
 // drawn nor hit-tested.

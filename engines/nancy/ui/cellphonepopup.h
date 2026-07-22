@@ -47,6 +47,10 @@ public:
 	void open();
 	void close();
 	void toggle() { if (_isVisible) close(); else open(); }
+	bool isOpen() const { return _isVisible; }
+	void getAgentControls(Common::Array<AgentControl> &controls) const;
+	Common::String getAgentState() const;
+	void getAgentTextLines(Common::Array<Common::String> &lines) const;
 
 	// True once a call has connected and the popup has scene-changed into the
 	// conversation. The phone is just decoration then and the conversation

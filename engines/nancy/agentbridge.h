@@ -60,6 +60,7 @@ private:
 	void advancePendingAction();
 	bool queueActivation(uint recordIndex);
 	bool queueAgentControlActivation(uint recordIndex, const Common::String &controlID);
+	bool queueUIActivation(const Common::String &target);
 	void completePendingAction(const StateDigest &after, bool terminal = false);
 	void sendError(const Common::String &requestID, const Common::String &code,
 		const Common::String &message);

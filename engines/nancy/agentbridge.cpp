@@ -32,6 +32,10 @@
 #include "engines/nancy/nancy.h"
 #include "engines/nancy/state/scene.h"
 #include "engines/nancy/ui/conversationpopup.h"
+#include "engines/nancy/ui/cellphonepopup.h"
+#include "engines/nancy/ui/inventorypopup.h"
+#include "engines/nancy/ui/notebookpopup.h"
+#include "engines/nancy/ui/taskbar.h"
 #include "engines/nancy/ui/viewport.h"
 
 #ifdef USE_ENET
@@ -347,12 +351,22 @@ Common::String AgentBridge::buildObservationJSON() {
 	const SceneChangeDescription &sceneInfo = scene.getSceneInfo();
 	Action::ConversationSound *conversation = scene.getActiveConversation();
 	Common::Array<Action::ActionRecord *> &records = scene.getActionManager().getActionRecords();
+	UI::InventoryPopup &inventoryPopup = scene.getInventoryPopup();
+	UI::NotebookPopup &notebookPopup = scene.getNotebookPopup();
+	UI::CellPhonePopup &cellPhonePopup = scene.getCellPhonePopup();
+	const bool popupOpen = inventoryPopup.isOpen() || notebookPopup.isOpen() || cellPhonePopup.isOpen();
 	const char *mode = conversation ? "dialogue" : "exploration";
-	if (!conversation) {
+	if (inventoryPopup.isOpen())
+		mode = "inventory";
+	else if (notebookPopup.isOpen())
+		mode = "notebook";
+	else if (cellPhonePopup.isOpen())
+		mode = "cell_phone";
+	else if (!conversation) {
 		for (Action::ActionRecord *record : records) {
 			if (!record || !record->_isActive || record->_isDone)
 				continue;
-			Common::Array<Action::AgentControl> controls;
+			Common::Array<AgentControl> controls;
 			record->getAgentControls(controls);
 			if (!controls.empty() || !record->getAgentState().empty() || record->getRecordTypeName().contains("Puzzle")) {
 				mode = "puzzle";
@@ -398,7 +412,7 @@ Common::String AgentBridge::buildObservationJSON() {
 	root.setVal("difficulty", jsonInteger(scene.getDifficulty()));
 
 	Common::JSONArray affordances;
-	for (uint index = 0; index < records.size(); ++index) {
+	if (!popupOpen) for (uint index = 0; index < records.size(); ++index) {
 		Action::ActionRecord *record = records[index];
 		if (!record || !record->_isActive || record->_isDone)
 			continue;
@@ -430,9 +444,9 @@ Common::String AgentBridge::buildObservationJSON() {
 			affordances.push_back(new Common::JSONValue(affordance));
 		}
 
-		Common::Array<Action::AgentControl> controls;
+		Common::Array<AgentControl> controls;
 		record->getAgentControls(controls);
-		for (const Action::AgentControl &control : controls) {
+		for (const AgentControl &control : controls) {
 			const Common::Rect screenRect = scene.getViewport().convertViewportToScreen(control.hotspot);
 			Common::JSONObject affordance;
 			affordance.setVal("id", new Common::JSONValue(Common::String::format("control_%u_%u_%s",
@@ -447,10 +461,54 @@ Common::String AgentBridge::buildObservationJSON() {
 			affordances.push_back(new Common::JSONValue(affordance));
 		}
 	}
+
+	Common::Array<AgentControl> uiControls;
+	Common::String uiOwner;
+	Common::String uiState;
+	Common::Array<Common::String> uiText;
+	if (inventoryPopup.isOpen()) {
+		uiOwner = "inventory";
+		inventoryPopup.getAgentControls(uiControls);
+	} else if (notebookPopup.isOpen()) {
+		uiOwner = "notebook";
+		uiState = notebookPopup.getAgentState();
+		notebookPopup.getAgentControls(uiControls);
+		uiText = notebookPopup.getTextLines();
+	} else if (cellPhonePopup.isOpen()) {
+		uiOwner = "cell_phone";
+		uiState = cellPhonePopup.getAgentState();
+		cellPhonePopup.getAgentControls(uiControls);
+		cellPhonePopup.getAgentTextLines(uiText);
+	} else if (scene.getTaskbar()) {
+		uiOwner = "taskbar";
+		scene.getTaskbar()->getAgentControls(uiControls);
+	}
+	for (const AgentControl &control : uiControls) {
+		Common::JSONObject affordance;
+		affordance.setVal("id", new Common::JSONValue(Common::String::format("ui_%s_%s", uiOwner.c_str(), control.id.c_str())));
+		affordance.setVal("kind", new Common::JSONValue("ui_control"));
+		affordance.setVal("description", new Common::JSONValue(control.description));
+		affordance.setVal("record_type", new Common::JSONValue("PlayerUI"));
+		affordance.setVal("cursor", jsonInteger(CursorManager::kHotspotArrow));
+		affordance.setVal("hotspot", jsonRect(control.hotspot));
+		affordance.setVal("screen_hotspot", jsonRect(control.hotspot));
+		affordance.setVal("visible", new Common::JSONValue(!control.hotspot.isEmpty()));
+		affordances.push_back(new Common::JSONValue(affordance));
+	}
 	root.setVal("affordances", new Common::JSONValue(affordances));
 
+	Common::JSONObject ui;
+	ui.setVal("type", new Common::JSONValue(uiOwner));
+	if (!uiState.empty())
+		ui.setVal("state", new Common::JSONValue(uiState));
+	Common::JSONArray uiTextJSON;
+	for (const Common::String &line : uiText)
+		uiTextJSON.push_back(new Common::JSONValue(line));
+	ui.setVal("text", new Common::JSONValue(uiTextJSON));
+	root.setVal("ui", new Common::JSONValue(ui));
+
 	Common::JSONArray puzzleStates;
-	for (uint index = 0; index < records.size(); ++index) {
+	if (!popupOpen) for (uint index = 0; index < records.size(); ++index) {
 		Action::ActionRecord *record = records[index];
 		if (!record || !record->_isActive || record->_isDone)
 			continue;
@@ -605,18 +663,42 @@ void AgentBridge::publishObservation(bool force) {
 	}
 	State::Scene &scene = State::Scene::instance();
 	Common::Array<Action::ActionRecord *> &records = scene.getActionManager().getActionRecords();
-	for (uint i = 0; i < records.size(); ++i) {
+	const bool popupOpen = scene.getInventoryPopup().isOpen() || scene.getNotebookPopup().isOpen() ||
+		scene.getCellPhonePopup().isOpen();
+	if (!popupOpen) for (uint i = 0; i < records.size(); ++i) {
 		Action::ActionRecord *record = records[i];
 		if (!record || !record->_isActive || record->_isDone)
 			continue;
 		if (record->_hasHotspot)
 			fingerprint += Common::String::format("|%u:%d:%s", i, (int)record->getHoverCursor(), record->_description.c_str());
 		fingerprint += record->getAgentState();
-		Common::Array<Action::AgentControl> controls;
+		Common::Array<AgentControl> controls;
 		record->getAgentControls(controls);
-		for (const Action::AgentControl &control : controls)
+		for (const AgentControl &control : controls)
 			fingerprint += Common::String::format("|%u:%s:%s", i, control.id.c_str(), control.description.c_str());
 	}
+	Common::Array<AgentControl> uiControls;
+	if (scene.getInventoryPopup().isOpen()) {
+		fingerprint += "|ui:inventory";
+		scene.getInventoryPopup().getAgentControls(uiControls);
+	} else if (scene.getNotebookPopup().isOpen()) {
+		fingerprint += "|ui:notebook:" + scene.getNotebookPopup().getAgentState();
+		scene.getNotebookPopup().getAgentControls(uiControls);
+		for (const Common::String &line : scene.getNotebookPopup().getTextLines())
+			fingerprint += line;
+	} else if (scene.getCellPhonePopup().isOpen()) {
+		fingerprint += "|ui:cell_phone:" + scene.getCellPhonePopup().getAgentState();
+		scene.getCellPhonePopup().getAgentControls(uiControls);
+		Common::Array<Common::String> lines;
+		scene.getCellPhonePopup().getAgentTextLines(lines);
+		for (const Common::String &line : lines)
+			fingerprint += line;
+	} else if (scene.getTaskbar()) {
+		fingerprint += "|ui:taskbar";
+		scene.getTaskbar()->getAgentControls(uiControls);
+	}
+	for (const AgentControl &control : uiControls)
+		fingerprint += Common::String::format("|ui:%s:%s", control.id.c_str(), control.description.c_str());
 	for (const Common::String &line : scene.getTextbox().getTextLines())
 		fingerprint += line;
 	if (force || fingerprint != _lastObservationDigest) {
@@ -736,9 +818,9 @@ bool AgentBridge::queueAgentControlActivation(uint recordIndex, const Common::St
 	if (!record || !record->_isActive || record->_isDone)
 		return false;
 
-	Common::Array<Action::AgentControl> controls;
+	Common::Array<AgentControl> controls;
 	record->getAgentControls(controls);
-	for (const Action::AgentControl &control : controls) {
+	for (const AgentControl &control : controls) {
 		if (control.id != controlID || !control.hotspot.isValidRect())
 			continue;
 		const Common::Rect hotspot = scene.getViewport().convertViewportToScreen(control.hotspot);
@@ -747,6 +829,38 @@ bool AgentBridge::queueAgentControlActivation(uint recordIndex, const Common::St
 		NancyInput input;
 		input.mousePos = Common::Point(hotspot.left + hotspot.width() / 2,
 			hotspot.top + hotspot.height() / 2);
+		input.input = NancyInput::kLeftMouseButtonUp;
+		g_nancy->_input->queueSyntheticInput(input);
+		return true;
+	}
+	return false;
+}
+
+bool AgentBridge::queueUIActivation(const Common::String &target) {
+	State::Scene &scene = State::Scene::instance();
+	Common::Array<AgentControl> controls;
+	Common::String owner;
+	if (scene.getInventoryPopup().isOpen()) {
+		owner = "inventory";
+		scene.getInventoryPopup().getAgentControls(controls);
+	} else if (scene.getNotebookPopup().isOpen()) {
+		owner = "notebook";
+		scene.getNotebookPopup().getAgentControls(controls);
+	} else if (scene.getCellPhonePopup().isOpen()) {
+		owner = "cell_phone";
+		scene.getCellPhonePopup().getAgentControls(controls);
+	} else if (scene.getTaskbar()) {
+		owner = "taskbar";
+		scene.getTaskbar()->getAgentControls(controls);
+	}
+
+	for (const AgentControl &control : controls) {
+		if (target != Common::String::format("ui_%s_%s", owner.c_str(), control.id.c_str()) ||
+				!control.hotspot.isValidRect())
+			continue;
+		NancyInput input;
+		input.mousePos = Common::Point(control.hotspot.left + control.hotspot.width() / 2,
+			control.hotspot.top + control.hotspot.height() / 2);
 		input.input = NancyInput::kLeftMouseButtonUp;
 		g_nancy->_input->queueSyntheticInput(input);
 		return true;
@@ -800,6 +914,12 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 			input.input = NancyInput::kLeftMouseButtonUp;
 			g_nancy->_input->queueSyntheticInput(input);
 			_actionWaitForScene = true;
+		} else if (target.hasPrefix("ui_")) {
+			if (!queueUIActivation(target)) {
+				sendError(requestID, "invalid_target", "UI control is not currently visible and clickable");
+				delete rootValue;
+				return;
+			}
 		} else {
 			State::Scene &scene = State::Scene::instance();
 			Common::Array<Action::ActionRecord *> &records = scene.getActionManager().getActionRecords();
@@ -812,9 +932,9 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 				}
 				if (!records[i] || !records[i]->_isActive || records[i]->_isDone)
 					continue;
-				Common::Array<Action::AgentControl> controls;
+				Common::Array<AgentControl> controls;
 				records[i]->getAgentControls(controls);
-				for (const Action::AgentControl &control : controls) {
+				for (const AgentControl &control : controls) {
 					if (target == Common::String::format("control_%u_%u_%s",
 						scene.getSceneInfo().sceneID, i, control.id.c_str())) {
 						recordIndex = i;

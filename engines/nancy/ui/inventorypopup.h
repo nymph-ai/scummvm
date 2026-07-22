@@ -49,6 +49,7 @@ public:
 	void handleInput(NancyInput &input);
 
 	bool isOpen() const { return _isVisible; }
+	void getAgentControls(Common::Array<AgentControl> &controls) const;
 	void open();
 	void close();
 
