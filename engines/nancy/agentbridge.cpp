@@ -455,12 +455,14 @@ Common::String AgentBridge::buildObservationJSON() {
 		if (!record || !record->_isActive || record->_isDone)
 			continue;
 		const Common::String state = record->getAgentState();
-		if (state.empty())
+		const Common::String recordType = record->getRecordTypeName();
+		if (state.empty() && !recordType.contains("Puzzle"))
 			continue;
 		Common::JSONObject puzzle;
 		puzzle.setVal("id", new Common::JSONValue(Common::String::format("record_%u_%u", sceneInfo.sceneID, index)));
-		puzzle.setVal("record_type", new Common::JSONValue(record->getRecordTypeName()));
-		puzzle.setVal("state", new Common::JSONValue(state));
+		puzzle.setVal("record_type", new Common::JSONValue(recordType));
+		if (!state.empty())
+			puzzle.setVal("state", new Common::JSONValue(state));
 		puzzleStates.push_back(new Common::JSONValue(puzzle));
 	}
 	root.setVal("puzzles", new Common::JSONValue(puzzleStates));

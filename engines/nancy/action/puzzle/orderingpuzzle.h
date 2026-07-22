@@ -48,6 +48,8 @@ public:
 	void readData(Common::SeekableReadStream &stream) override;
 	void execute() override;
 	void handleInput(NancyInput &input) override;
+	void getAgentControls(Common::Array<AgentControl> &controls) const override;
+	Common::String getAgentState() const override;
 
 	bool isViewportRelative() const override { return true; }
 

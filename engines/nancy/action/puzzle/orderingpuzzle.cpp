@@ -803,6 +803,59 @@ void OrderingPuzzle::handleInput(NancyInput &input) {
 	}
 }
 
+void OrderingPuzzle::getAgentControls(Common::Array<AgentControl> &controls) const {
+	if (_state != kRun || _solveState != kNotSolved)
+		return;
+
+	bool canClick = true;
+	if (_itemsStayDown && g_nancy->_sound->isSoundPlaying(_pushDownSound)) {
+		canClick = false;
+	} else if (_puzzleType == kPiano) {
+		for (bool down : _downItems) {
+			if (down) {
+				canClick = false;
+				break;
+			}
+		}
+	}
+	if (!canClick)
+		return;
+
+	if (_exitHotspot.isValidRect())
+		controls.push_back({"exit", "leave this puzzle", _exitHotspot});
+	if (_needButtonToCheckSuccess && _checkButtonDest.isValidRect())
+		controls.push_back({"check", "check the entered puzzle sequence", _checkButtonDest});
+
+	for (uint i = 0; i < _hotspots.size(); ++i) {
+		Common::String label;
+		if (_puzzleType == kPiano && g_nancy->getGameType() == kGameTypeNancy11 && i < 26) {
+			label = Common::String::format("press mechanism %c", 'A' + i);
+		} else {
+			label = Common::String::format("press puzzle control %u", i + 1);
+		}
+		controls.push_back({Common::String::format("key_%u", i), label, _hotspots[i]});
+	}
+}
+
+Common::String OrderingPuzzle::getAgentState() const {
+	Common::String state = getRecordTypeName();
+	if (_puzzleType == kKeypad && _numStages > 1)
+		state += Common::String::format("; visible stage %d", _currentStage + 1);
+
+	state += "; entered sequence:";
+	if (_clickedSequence.empty()) {
+		state += " empty";
+	} else {
+		for (uint16 id : _clickedSequence) {
+			if (_puzzleType == kPiano && g_nancy->getGameType() == kGameTypeNancy11 && id < 26)
+				state += Common::String::format(" %c", 'A' + id);
+			else
+				state += Common::String::format(" %u", id + 1);
+		}
+	}
+	return state;
+}
+
 Common::String OrderingPuzzle::getRecordTypeName() const {
 	switch (_puzzleType) {
 	case kPiano:
