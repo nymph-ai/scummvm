@@ -62,6 +62,10 @@ public:
 	// Records the hotspot offset so response clicks map to the correct index.
 	void setResponseStart() { _responseStartIdx = (uint)_hotspots.size(); }
 
+	// Return the center of a currently visible response hotspot. Agent input
+	// uses this point to traverse the same click path as a human response.
+	bool prepareResponseClickPoint(uint responseIndex, Common::Point &point);
+
 private:
 	void drawBackground();
 	// Full content rebuild: lay the text out into _fullSurface (expensive), then

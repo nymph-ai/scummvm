@@ -25,6 +25,7 @@
 #include "common/random.h"
 
 #include "engines/nancy/nancy.h"
+#include "engines/nancy/agentbridge.h"
 #include "engines/nancy/iff.h"
 #include "engines/nancy/input.h"
 #include "engines/nancy/sound.h"
@@ -254,6 +255,8 @@ void Scene::changeScene(const SceneChangeDescription &sceneDescription) {
 	}
 
 	_sceneState.nextScene = sceneDescription;
+	if (g_nancy->getAgentBridge())
+		g_nancy->getAgentBridge()->notifySceneChange(sceneDescription.sceneID);
 	_state = kLoad;
 }
 
@@ -434,6 +437,9 @@ void Scene::addItemToInventory(int16 id) {
 				_taskbar->setNotification(kTaskButtonInventory, 0);
 			}
 		}
+
+		if (g_nancy->getAgentBridge())
+			g_nancy->getAgentBridge()->notifyItemChanged("item_acquired", id);
 	}
 }
 
@@ -468,6 +474,9 @@ void Scene::removeItemFromInventory(int16 id, bool pickUp) {
 				_inventoryPopup.refreshGrid();
 			}
 		}
+
+		if (g_nancy->getAgentBridge())
+			g_nancy->getAgentBridge()->notifyItemChanged(pickUp ? "item_selected" : "item_removed", id);
 	}
 }
 
@@ -645,7 +654,11 @@ void Scene::setEventFlag(int16 label, byte flag) {
 	label = eventFlagToIndex(label);
 
 	if (label > kEvNoEvent && (uint)label < g_nancy->getStaticData().numEventFlags) {
-		_flags.eventFlags[label] = flag;
+		if (_flags.eventFlags[label] != flag) {
+			_flags.eventFlags[label] = flag;
+			if (g_nancy->getAgentBridge())
+				g_nancy->getAgentBridge()->notifyEventFlagChanged();
+		}
 	}
 }
 
@@ -1170,6 +1183,8 @@ void Scene::load(bool fromSaveFile) {
 
 	SceneChangeDescription lastScene = _sceneState.currentScene;
 	_sceneState.currentScene = _sceneState.nextScene;
+	if (g_nancy->getAgentBridge())
+		g_nancy->getAgentBridge()->notifySceneEntered(_sceneState.currentScene.sceneID);
 
 	// Make sure to discard invalid front vectors and reuse the last one
 	if (_sceneState.currentScene.listenerFrontVector.isZero()) {

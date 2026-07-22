@@ -57,6 +57,37 @@ ConversationSound::~ConversationSound() {
 	}
 }
 
+bool ConversationSound::isWaitingForResponse() {
+	if (_state != kRun || !_hasDrawnTextbox ||
+		g_nancy->_sound->isSoundPlaying(_sound) || !isVideoDonePlaying()) {
+		return false;
+	}
+
+	return getVisibleResponseCount() != 0;
+}
+
+uint ConversationSound::getVisibleResponseCount() const {
+	uint count = 0;
+	for (const ResponseStruct &response : _responses) {
+		if (response.isOnScreen)
+			++count;
+	}
+	return count;
+}
+
+const Common::String &ConversationSound::getVisibleResponseText(uint index) const {
+	for (const ResponseStruct &response : _responses) {
+		if (!response.isOnScreen)
+			continue;
+		if (index == 0)
+			return response.text;
+		--index;
+	}
+
+	static const Common::String empty;
+	return empty;
+}
+
 void ConversationSound::init() {
 	RenderObject::init();
 }

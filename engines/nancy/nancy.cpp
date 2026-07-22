@@ -39,6 +39,7 @@
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/console.h"
 #include "engines/nancy/util.h"
+#include "engines/nancy/agentbridge.h"
 
 #include "engines/nancy/action/conversation.h"
 
@@ -63,7 +64,8 @@ NancyEngine::NancyEngine(OSystem *syst, const NancyGameDescription *gd) :
 		_datFileMajorVersion(1),
 		_datFileMinorVersion(0),
 		_false(gd->gameType <= kGameTypeNancy2 ? 1 : 0),
-		_true(gd->gameType <= kGameTypeNancy2 ? 2 : 1) {
+		_true(gd->gameType <= kGameTypeNancy2 ? 2 : 1),
+		_agentBridge(nullptr) {
 
 	g_nancy = this;
 
@@ -80,6 +82,8 @@ NancyEngine::NancyEngine(OSystem *syst, const NancyGameDescription *gd) :
 }
 
 NancyEngine::~NancyEngine() {
+	delete _agentBridge;
+	_agentBridge = nullptr;
 	destroyState(NancyState::kLogo);
 	destroyState(NancyState::kCredits);
 	destroyState(NancyState::kMap);
@@ -327,6 +331,21 @@ void NancyEngine::addDeferredLoader(Common::SharedPtr<DeferredLoader> &loaderPtr
 Common::Error NancyEngine::run() {
 	setDebugger(new NancyConsole());
 
+	if (ConfMan.hasKey("nancy_agent_bridge") && ConfMan.getBool("nancy_agent_bridge")) {
+		const int configuredPort = ConfMan.hasKey("nancy_agent_port") ? ConfMan.getInt("nancy_agent_port") : 24680;
+		if (configuredPort <= 0 || configuredPort > 65535) {
+			warning("Ignoring invalid Nancy agent bridge port %d", configuredPort);
+		} else {
+			_agentBridge = new Agent::AgentBridge();
+			if (_agentBridge->start((uint16)configuredPort)) {
+				_input->setAgentExclusive(true);
+			} else {
+				delete _agentBridge;
+				_agentBridge = nullptr;
+			}
+		}
+	}
+
 	// Set the default number of saves for earlier games
 	if (!ConfMan.hasKey("nancy_max_saves", ConfMan.getActiveDomainName())) {
 		if (getGameType() <= kGameTypeNancy7) {
@@ -355,6 +374,8 @@ Common::Error NancyEngine::run() {
 	// Main loop
 	while (true) {
 		_input->processEvents();
+		if (_agentBridge)
+			_agentBridge->poll();
 		if (shouldQuit()) {
 			break;
 		}

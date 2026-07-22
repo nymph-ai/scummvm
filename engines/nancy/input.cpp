@@ -132,8 +132,19 @@ void InputManager::processEvents() {
 	}
 }
 
-NancyInput InputManager::getInput() const {
+NancyInput InputManager::getInput() {
 	NancyInput ret;
+	ret.input = 0;
+	ret.mousePos = g_nancy->getEventManager()->getMousePos();
+
+	if (_hasSyntheticInput) {
+		ret = _syntheticInput;
+		_hasSyntheticInput = false;
+		return ret;
+	}
+
+	if (_agentExclusive)
+		return ret;
 
 	// Filter out inputs that began in other states; e.g. if the mouse was pushed and held down
 	// in a previous state, the button up event won't fire. Right now we simply block all events
@@ -157,6 +168,12 @@ NancyInput InputManager::getInput() const {
 void InputManager::forceCleanInput() {
 	_inputs = 0;
 	_otherKbdInput.clear();
+	_hasSyntheticInput = false;
+}
+
+void InputManager::queueSyntheticInput(const NancyInput &input) {
+	_syntheticInput = input;
+	_hasSyntheticInput = true;
 }
 
 void InputManager::setKeymapEnabled(Common::String keymapName, bool enabled) {
