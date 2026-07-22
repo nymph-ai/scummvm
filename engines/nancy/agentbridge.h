@@ -75,6 +75,8 @@ private:
 	bool _actionPending;
 	bool _actionInputQueued;
 	bool _actionWaitForScene;
+	bool _actionWaitForPhoneTransition;
+	bool _actionSawPhoneBusy;
 	uint64 _actionIssuedTick;
 	Common::String _actionID;
 	Common::String _actionName;

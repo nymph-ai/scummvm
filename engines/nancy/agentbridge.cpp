@@ -273,7 +273,8 @@ void AgentTransport::sendLine(const Common::String &line) {
 
 AgentBridge::AgentBridge() :
 		_transport(new AgentTransport()), _tick(0), _clientWasConnected(false), _wasObservationPoint(false),
-		_actionPending(false), _actionInputQueued(false), _actionWaitForScene(false), _actionIssuedTick(0),
+		_actionPending(false), _actionInputQueued(false), _actionWaitForScene(false),
+		_actionWaitForPhoneTransition(false), _actionSawPhoneBusy(false), _actionIssuedTick(0),
 		_settleFrames(0), _activationRecordIndex(-1), _activationPanRemaining(0) {}
 
 AgentBridge::~AgentBridge() {
@@ -890,6 +891,8 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 	_actionName = action;
 	_actionInputQueued = true;
 	_actionWaitForScene = false;
+	_actionWaitForPhoneTransition = false;
+	_actionSawPhoneBusy = false;
 	_activationRecordIndex = -1;
 	_activationPanRemaining = 0;
 	if (g_nancy->getState() == NancyState::kMainMenu && action != "activate" && action != "load" && action != "wait") {
@@ -920,6 +923,8 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 				delete rootValue;
 				return;
 			}
+			if (target == "ui_cell_phone_talk")
+				_actionWaitForPhoneTransition = true;
 		} else {
 			State::Scene &scene = State::Scene::instance();
 			Common::Array<Action::ActionRecord *> &records = scene.getActionManager().getActionRecords();
@@ -1064,6 +1069,23 @@ void AgentBridge::advancePendingAction() {
 			return;
 		_actionWaitForScene = false;
 	}
+	if (_actionWaitForPhoneTransition) {
+		const bool phoneBusy = State::Scene::hasInstance() &&
+			State::Scene::instance().getCellPhonePopup().isAgentBusy();
+		if (phoneBusy) {
+			_actionSawPhoneBusy = true;
+			_settleFrames = 0;
+			return;
+		}
+		if (!_actionSawPhoneBusy) {
+			// Allow a rejected/no-signal Talk click to settle normally after its
+			// short DTMF sound if no call transition begins.
+			if (_tick - _actionIssuedTick < 180)
+				return;
+		} else {
+			_actionWaitForPhoneTransition = false;
+		}
+	}
 
 	if (!_actionInputQueued) {
 		if (!isStableDecisionPoint())
@@ -1120,6 +1142,8 @@ void AgentBridge::completePendingAction(const StateDigest &after, bool terminal)
 	_actionPending = false;
 	_actionInputQueued = false;
 	_actionWaitForScene = false;
+	_actionWaitForPhoneTransition = false;
+	_actionSawPhoneBusy = false;
 	_settleFrames = 0;
 	publishObservation(true);
 }
