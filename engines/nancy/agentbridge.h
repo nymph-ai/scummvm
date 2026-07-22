@@ -59,6 +59,7 @@ private:
 	void handleAction(Common::JSONValue *root);
 	void advancePendingAction();
 	bool queueActivation(uint recordIndex);
+	bool queueAgentControlActivation(uint recordIndex, const Common::String &controlID);
 	void completePendingAction(const StateDigest &after, bool terminal = false);
 	void sendError(const Common::String &requestID, const Common::String &code,
 		const Common::String &message);

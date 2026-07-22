@@ -39,6 +39,15 @@ struct NancyInput;
 
 namespace Action {
 
+// A currently visible, human-clickable control owned by an ActionRecord.
+// Most scene interactions use ActionRecord::_hotspot; self-contained puzzle
+// records instead handle their authored button rectangles internally.
+struct AgentControl {
+	Common::String id;
+	Common::String description;
+	Common::Rect hotspot;
+};
+
 enum struct DependencyType : int16 {
 	kNone							= 0,
 	kInventory						= 1,
@@ -117,6 +126,8 @@ public:
 	virtual CursorManager::CursorType getHoverCursor() const { return CursorManager::kHotspot; }
 	virtual bool cursorSetFromScript() const { return false; }
 	virtual void handleInput(NancyInput &input) {}
+	virtual void getAgentControls(Common::Array<AgentControl> &controls) const {}
+	virtual Common::String getAgentState() const { return Common::String(); }
 
 	// Used for debugging
 	virtual Common::String getRecordTypeName() const = 0;
