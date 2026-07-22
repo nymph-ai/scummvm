@@ -1807,6 +1807,11 @@ Common::String CellPhonePopup::getAgentState() const {
 	Common::String out = state < ARRAYSIZE(names) ? names[state] : "unknown";
 	if (!_dialedNumber.empty())
 		out += Common::String::format("; dialed number: %s", _dialedNumber.c_str());
+	if (_screenState == kDirectory) {
+		const int selected = contactIndexForVisibleRow(_directorySelection);
+		if (selected >= 0)
+			out += Common::String::format("; selected contact: %s", _contacts[selected].name.c_str());
+	}
 	if (_noSignal)
 		out += "; no signal";
 	return out;
