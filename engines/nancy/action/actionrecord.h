@@ -119,6 +119,7 @@ public:
 	virtual void handleInput(NancyInput &input) {}
 	virtual void getAgentControls(Common::Array<AgentControl> &controls) const {}
 	virtual Common::String getAgentState() const { return Common::String(); }
+	virtual bool isAgentBusy() const { return false; }
 
 	// Used for debugging
 	virtual Common::String getRecordTypeName() const = 0;

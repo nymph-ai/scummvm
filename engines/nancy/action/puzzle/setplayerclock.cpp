@@ -320,6 +320,13 @@ Common::String SetPlayerClock::getAgentState() const {
 		currentTime.getHours(), currentTime.getMinutes());
 }
 
+bool SetPlayerClock::isAgentBusy() const {
+	// These are the same intervals in which handleInput ignores human clicks:
+	// initialization, pressed-button sound/redraw, and the accepted/cancelled
+	// transition into the destination scene.
+	return _state != kRun || _clearButton || _alarmState == kWait;
+}
+
 void SetPlayerClock::drawTime(uint16 hours, uint16 minutes) {
 	_drawSurface.fillRect(_hoursDest, _drawSurface.getTransparentColor());
 	_drawSurface.fillRect(_minutesDest, _drawSurface.getTransparentColor());

@@ -315,6 +315,11 @@ bool AgentBridge::isStableDecisionPoint() const {
 		return false;
 	}
 
+	for (Action::ActionRecord *record : scene.getActionManager().getActionRecords()) {
+		if (record && record->_isActive && !record->_isDone && record->isAgentBusy())
+			return false;
+	}
+
 	Action::ConversationSound *conversation = scene.getActiveConversation();
 	return !conversation || conversation->isWaitingForResponse();
 }
