@@ -272,7 +272,7 @@ void AgentTransport::sendLine(const Common::String &line) {
 }
 
 AgentBridge::AgentBridge() :
-		_transport(new AgentTransport()), _tick(0), _clientWasConnected(false),
+		_transport(new AgentTransport()), _tick(0), _clientWasConnected(false), _wasObservationPoint(false),
 		_actionPending(false), _actionInputQueued(false), _actionWaitForScene(false), _actionIssuedTick(0),
 		_settleFrames(0), _activationRecordIndex(-1), _activationPanRemaining(0) {}
 
@@ -1145,8 +1145,10 @@ void AgentBridge::poll() {
 		handleLine(line);
 
 	advancePendingAction();
-	if (!_actionPending)
-		publishObservation();
+	const bool observationPoint = isObservationPoint();
+	if (!_actionPending && observationPoint)
+		publishObservation(!_wasObservationPoint);
+	_wasObservationPoint = observationPoint;
 }
 
 void AgentBridge::notifySceneChange(uint16 sceneID) {

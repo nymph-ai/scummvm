@@ -69,6 +69,7 @@ private:
 	AgentTransport *_transport;
 	uint64 _tick;
 	bool _clientWasConnected;
+	bool _wasObservationPoint;
 	Common::String _lastObservationDigest;
 
 	bool _actionPending;
