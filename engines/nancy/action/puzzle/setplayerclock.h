@@ -41,6 +41,7 @@ public:
 	void handleInput(NancyInput &input) override;
 	void getAgentControls(Common::Array<AgentControl> &controls) const override;
 	Common::String getAgentState() const override;
+	bool isAgentBusy() const override;
 
 	bool isViewportRelative() const override { return true; }
 
