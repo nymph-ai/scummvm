@@ -48,6 +48,9 @@ public:
 	void open();
 	void close();
 	void toggle() { if (_isVisible) close(); else open(); }
+	bool isOpen() const { return _isVisible; }
+	void getAgentControls(Common::Array<AgentControl> &controls) const;
+	Common::String getAgentState() const;
 
 	// Nancy 11+ lazily populates the notebook via a hidden "prep scene" run when
 	// it opens. Returns that scene ID (UINB header.linkbackScene), or kNoScene

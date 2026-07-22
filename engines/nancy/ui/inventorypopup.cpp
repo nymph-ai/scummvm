@@ -377,6 +377,18 @@ void InventoryPopup::drawSlot(uint slotIndex, int16 itemId, bool highlighted) {
 											slotDst.top - chunkOrigin.y));
 }
 
+void InventoryPopup::getAgentControls(Common::Array<AgentControl> &controls) const {
+	if (!_isVisible || !_uiivData || !_uiivData->header.secondaryButtonEnabled)
+		return;
+	Common::Rect rect = _uiivData->header.secondaryButton.destRect;
+	if (_uiivData->header.secondaryButton.destUsesGameFrameOffset) {
+		const VIEW *view = GetEngineData(VIEW);
+		if (view)
+			rect.translate(view->screenPosition.left, view->screenPosition.top);
+	}
+	controls.push_back({"close", "close inventory", rect});
+}
+
 void InventoryPopup::handleInput(NancyInput &input) {
 	if (!_isVisible)
 		return;

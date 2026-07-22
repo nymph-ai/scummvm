@@ -22,6 +22,7 @@
 #ifndef NANCY_UI_TASKBAR_H
 #define NANCY_UI_TASKBAR_H
 
+#include "engines/nancy/commontypes.h"
 #include "engines/nancy/renderobject.h"
 
 namespace Nancy {
@@ -41,6 +42,7 @@ public:
 	void init() override;
 	void registerGraphics() override;
 	void handleInput(NancyInput &input);
+	void getAgentControls(Common::Array<AgentControl> &controls) const;
 
 	// Enable / disable a taskbar button. A disabled button is rendered
 	// in its disabled sprite and ignores clicks.

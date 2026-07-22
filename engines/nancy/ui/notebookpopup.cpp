@@ -271,6 +271,32 @@ void NotebookPopup::drawTab(uint index, bool drawHover) {
 	_needsRedraw = true;
 }
 
+void NotebookPopup::getAgentControls(Common::Array<AgentControl> &controls) const {
+	if (!_isVisible || !_uinbData)
+		return;
+
+	if (_uinbData->header.secondaryButtonEnabled) {
+		Common::Rect rect = toPopupLocal(_uinbData->header.secondaryButton.destRect,
+			_uinbData->header.secondaryButton.destUsesGameFrameOffset != 0);
+		rect.translate(_screenPosition.left, _screenPosition.top);
+		controls.push_back({"close", "close notebook", rect});
+	}
+	for (uint i = 0; i < kNumTabs; ++i) {
+		const UIButtonSlot &tab = _uinbData->tabs[i];
+		if (!tab.enabled)
+			continue;
+		Common::Rect rect = toPopupLocal(tab.button.destRect,
+			tab.button.destUsesGameFrameOffset != 0);
+		rect.translate(_screenPosition.left, _screenPosition.top);
+		controls.push_back({Common::String::format("tab_%u", i),
+			i == 0 ? "show case journal" : "show tasks", rect});
+	}
+}
+
+Common::String NotebookPopup::getAgentState() const {
+	return Common::String::format("%s tab", _activeTab == 0 ? "case journal" : "tasks");
+}
+
 void NotebookPopup::handleInput(NancyInput &input) {
 	if (!_isVisible)
 		return;

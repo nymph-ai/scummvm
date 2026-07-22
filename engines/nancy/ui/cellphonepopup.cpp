@@ -1791,6 +1791,157 @@ Common::Point CellPhonePopup::mouseToChunkCoords(const Common::Point &mouse) con
 	return mouse;
 }
 
+static Common::Rect phoneLocalToScreen(const Common::Rect &rect, const Common::Rect &popup) {
+	Common::Rect out = rect;
+	out.translate(popup.left, popup.top);
+	return out;
+}
+
+Common::String CellPhonePopup::getAgentState() const {
+	static const char *const names[] = {
+		"welcome", "dialing", "placing call", "outgoing ring", "looking up contact",
+		"waiting for pickup", "connected", "invalid number", "waiting after invalid number",
+		"directory", "online hub", "web results", "email list", "content view"
+	};
+	const uint state = (uint)_screenState;
+	Common::String out = state < ARRAYSIZE(names) ? names[state] : "unknown";
+	if (!_dialedNumber.empty())
+		out += Common::String::format("; dialed number: %s", _dialedNumber.c_str());
+	if (_noSignal)
+		out += "; no signal";
+	return out;
+}
+
+void CellPhonePopup::getAgentTextLines(Common::Array<Common::String> &lines) const {
+	if (!_isVisible || !_uiclData)
+		return;
+	const CVTX *autotext = (const CVTX *)g_nancy->getEngineData("AUTOTEXT");
+	if (_screenState == kContentView && autotext && !_contentKey.empty()) {
+		const Common::String body = autotext->texts.getValOrDefault(_contentKey, "");
+		if (!body.empty())
+			lines.push_back(body);
+		return;
+	}
+	if (_screenState == kDirectory) {
+		const uint count = maxDirectoryRows();
+		for (uint row = 0; row < count; ++row) {
+			const int index = contactIndexForVisibleRow(row);
+			if (index >= 0)
+				lines.push_back(_contacts[index].name);
+		}
+		return;
+	}
+	if (isLinkListMode() && autotext) {
+		const CellPhoneData *data = (const CellPhoneData *)NancySceneState.getPuzzleData(CellPhoneData::getTag());
+		if (!data)
+			return;
+		const Common::Array<SearchLink> &list = _screenState == kWebList ? data->searchLinks : data->emailMessages;
+		const Common::Array<uint> visible = listVisibleIndices();
+		const uint rows = maxDirectoryRows() - listTitleRows();
+		for (uint row = 0; row < rows && _directoryScroll + row < visible.size(); ++row) {
+			const Common::String text = autotext->texts.getValOrDefault(list[visible[_directoryScroll + row]].key, "");
+			if (!text.empty())
+				lines.push_back(text);
+		}
+	}
+}
+
+void CellPhonePopup::getAgentControls(Common::Array<AgentControl> &controls) const {
+	if (!_isVisible || !_uiclData)
+		return;
+
+	if (_uiclData->header.secondaryButtonEnabled) {
+		Common::Rect rect = _uiclData->header.secondaryButton.destRect;
+		if (_uiclData->header.secondaryButton.destUsesGameFrameOffset) {
+			const VIEW *view = GetEngineData(VIEW);
+			if (view)
+				rect.translate(view->screenPosition.left, view->screenPosition.top);
+		}
+		controls.push_back({"close", "close cell phone", rect});
+	}
+
+	const bool transient = _screenState == kPlaceCall || _screenState == kWaitOutgoingRing ||
+		_screenState == kLookupContact || _screenState == kWaitPickup || _screenState == kConnected ||
+		_screenState == kInvalidNumber || _screenState == kWaitInvalid;
+	if (transient) {
+		if (isCallBackButtonActive())
+			controls.push_back({"cancel_call", "cancel call", phoneLocalToScreen(backButtonHitRect(0), _screenPosition)});
+		return;
+	}
+
+	const bool arrows = _screenState == kDirectory || isLinkListMode() || _screenState == kContentView;
+	if (arrows) {
+		if (!scrollUpButton().destRect.isEmpty())
+			controls.push_back({"scroll_up", "scroll up", scrollUpButton().destRect});
+		if (!scrollDownButton().destRect.isEmpty())
+			controls.push_back({"scroll_down", "scroll down", scrollDownButton().destRect});
+	}
+
+	if ((_screenState == kWelcome || _screenState == kDialing) &&
+			!_uiclData->helpButton.destRect.isEmpty() && !_uiclData->helpTextKey.empty())
+		controls.push_back({"help", "open phone help", _uiclData->helpButton.destRect});
+
+	const int backIndex = currentBackButtonIndex();
+	if (backIndex >= 0 && !_uiclData->subButtons[backIndex].destRect.isEmpty()) {
+		const char *label = (backIndex == 9) ? "go to browser home" : "go back";
+		controls.push_back({"back", label, _uiclData->subButtons[backIndex].destRect});
+	}
+
+	if (_screenState == kDirectory) {
+		for (uint row = 0; row < maxDirectoryRows(); ++row) {
+			const int contact = contactIndexForVisibleRow(row);
+			if (contact < 0)
+				continue;
+			controls.push_back({Common::String::format("contact_%u", row),
+				Common::String::format("select contact %s", _contacts[contact].name.c_str()),
+				phoneLocalToScreen(directoryRowRect(row), _screenPosition)});
+		}
+	} else if (_screenState == kOnlineHub) {
+		controls.push_back({"email", "open email", phoneLocalToScreen(hubEmailRect(), _screenPosition)});
+		controls.push_back({"web", "open web browser", phoneLocalToScreen(hubWebRect(), _screenPosition)});
+	} else if (isLinkListMode()) {
+		const CellPhoneData *data = (const CellPhoneData *)NancySceneState.getPuzzleData(CellPhoneData::getTag());
+		const CVTX *autotext = (const CVTX *)g_nancy->getEngineData("AUTOTEXT");
+		if (data) {
+			const Common::Array<SearchLink> &list = _screenState == kWebList ? data->searchLinks : data->emailMessages;
+			const Common::Array<uint> visible = listVisibleIndices();
+			const uint rows = maxDirectoryRows() - listTitleRows();
+			for (uint row = 0; row < rows && _directoryScroll + row < visible.size(); ++row) {
+				const SearchLink &entry = list[visible[_directoryScroll + row]];
+				Common::String label = autotext ? autotext->texts.getValOrDefault(entry.key, "") : Common::String();
+				if (label.empty())
+					label = _screenState == kEmailList ? "open visible email" : "open visible web result";
+				controls.push_back({Common::String::format("entry_%u", row), label,
+					phoneLocalToScreen(directoryRowRect(listTitleRows() + row), _screenPosition)});
+			}
+		}
+	} else if (_screenState == kContentView) {
+		if (_contentHeading == &_uiclData->browserHeading && !isBrowserArticle() &&
+				!_uiclData->subButtons[8].destRect.isEmpty())
+			controls.push_back({"search", "open web search results", _uiclData->subButtons[8].destRect});
+		for (uint i = 0; i < _contentHotspots.size(); ++i) {
+			if (!_contentHotspots[i].isEmpty())
+				controls.push_back({Common::String::format("link_%u", i), "open visible page link",
+					phoneLocalToScreen(_contentHotspots[i], _screenPosition)});
+		}
+	}
+
+	const bool keypadVisible = !isZoomedChromeState() || isHelpContentView();
+	if (!keypadVisible)
+		return;
+	for (uint i = 0; i < 10; ++i) {
+		if (!_uiclData->dialPadSlots[i].destRect.isEmpty())
+			controls.push_back({Common::String::format("digit_%u", i),
+				Common::String::format("press digit %u", i), _uiclData->dialPadSlots[i].destRect});
+	}
+	if (!_uiclData->dialPadSlots[12].destRect.isEmpty())
+		controls.push_back({"talk", "place call to selected contact or dialed number", _uiclData->dialPadSlots[12].destRect});
+	if (!_uiclData->dialPadSlots[13].destRect.isEmpty())
+		controls.push_back({"online", "open online services", _uiclData->dialPadSlots[13].destRect});
+	if (!_uiclData->dialPadSlots[14].destRect.isEmpty())
+		controls.push_back({"directory", "open contact directory", _uiclData->dialPadSlots[14].destRect});
+}
+
 void CellPhonePopup::handleInput(NancyInput &input) {
 	if (!_isVisible) {
 		return;
