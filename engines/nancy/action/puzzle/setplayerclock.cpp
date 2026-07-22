@@ -289,6 +289,37 @@ void SetPlayerClock::handleInput(NancyInput &input) {
 	}
 }
 
+void SetPlayerClock::getAgentControls(Common::Array<AgentControl> &controls) const {
+	// handleInput deliberately ignores clicks while a pressed button is being
+	// cleared. Do not advertise a control until the same human input path would
+	// accept it.
+	if (_state != kRun || _alarmState == kWait || _clearButton)
+		return;
+
+	controls.push_back({"cancel", "cancel and leave the alarm clock", _cancelButtonDest});
+	if (_alarmState == kTimeMode) {
+		controls.push_back({"alarm", "switch to alarm-setting mode", _alarmButtonDest});
+	} else {
+		controls.push_back({"time", "return to the current-time display", _timeButtonDest});
+		controls.push_back({"up", "increase the alarm hour", _upButtonDest});
+		controls.push_back({"down", "decrease the alarm hour", _downButtonDest});
+		controls.push_back({"set", "set the displayed alarm time", _setButtonDest});
+	}
+}
+
+Common::String SetPlayerClock::getAgentState() const {
+	if (_state == kActionTrigger && _alarmState != kWait)
+		return "leaving the alarm clock";
+	if (_alarmState == kWait)
+		return "alarm accepted; waiting to leave the clock";
+	if (_alarmState == kAlarmMode)
+		return Common::String::format("alarm-setting mode; displayed alarm time %02d:00", _alarmHours);
+
+	const Time currentTime = NancySceneState.getPlayerTime();
+	return Common::String::format("current-time mode; displayed time %02u:%02u",
+		currentTime.getHours(), currentTime.getMinutes());
+}
+
 void SetPlayerClock::drawTime(uint16 hours, uint16 minutes) {
 	_drawSurface.fillRect(_hoursDest, _drawSurface.getTransparentColor());
 	_drawSurface.fillRect(_minutesDest, _drawSurface.getTransparentColor());

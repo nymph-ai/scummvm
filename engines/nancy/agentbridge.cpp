@@ -350,7 +350,11 @@ Common::String AgentBridge::buildObservationJSON() {
 	const char *mode = conversation ? "dialogue" : "exploration";
 	if (!conversation) {
 		for (Action::ActionRecord *record : records) {
-			if (record && record->_isActive && !record->_isDone && record->getRecordTypeName().contains("Puzzle")) {
+			if (!record || !record->_isActive || record->_isDone)
+				continue;
+			Common::Array<Action::AgentControl> controls;
+			record->getAgentControls(controls);
+			if (!controls.empty() || !record->getAgentState().empty() || record->getRecordTypeName().contains("Puzzle")) {
 				mode = "puzzle";
 				break;
 			}
@@ -396,37 +400,70 @@ Common::String AgentBridge::buildObservationJSON() {
 	Common::JSONArray affordances;
 	for (uint index = 0; index < records.size(); ++index) {
 		Action::ActionRecord *record = records[index];
-		if (!record || !record->_isActive || record->_isDone || !record->_hasHotspot ||
-			!record->_hotspot.isValidRect()) {
+		if (!record || !record->_isActive || record->_isDone)
 			continue;
+
+		if (record->_hasHotspot && record->_hotspot.isValidRect()) {
+			const Common::Rect screenRect = scene.getViewport().convertViewportToScreen(record->_hotspot);
+			Common::String description = record->_description;
+			// Nancy 11's player challenge buttons are visibly labeled on the
+			// rendered book, but their action records contain only generic names.
+			// Preserve affordance-mode parity with what a human can read without
+			// exposing the flags or scene changes behind the buttons.
+			if (g_nancy->getGameType() == kGameTypeNancy11 && sceneInfo.sceneID == 0) {
+				if (index == 32)
+					description = "Gameplay Overview";
+				else if (index == 34)
+					description = "Junior Detective";
+				else if (index == 35)
+					description = "Senior Detective";
+			}
+			Common::JSONObject affordance;
+			affordance.setVal("id", new Common::JSONValue(Common::String::format("hs_%u_%u", sceneInfo.sceneID, index)));
+			affordance.setVal("kind", new Common::JSONValue(cursorName(record->getHoverCursor())));
+			affordance.setVal("description", new Common::JSONValue(description));
+			affordance.setVal("record_type", new Common::JSONValue(record->getRecordTypeName()));
+			affordance.setVal("cursor", jsonInteger(record->getHoverCursor()));
+			affordance.setVal("hotspot", jsonRect(record->_hotspot));
+			affordance.setVal("screen_hotspot", jsonRect(screenRect));
+			affordance.setVal("visible", new Common::JSONValue(!screenRect.isEmpty()));
+			affordances.push_back(new Common::JSONValue(affordance));
 		}
 
-		const Common::Rect screenRect = scene.getViewport().convertViewportToScreen(record->_hotspot);
-		Common::String description = record->_description;
-		// Nancy 11's player challenge buttons are visibly labeled on the
-		// rendered book, but their action records contain only generic names.
-		// Preserve affordance-mode parity with what a human can read without
-		// exposing the flags or scene changes behind the buttons.
-		if (g_nancy->getGameType() == kGameTypeNancy11 && sceneInfo.sceneID == 0) {
-			if (index == 32)
-				description = "Gameplay Overview";
-			else if (index == 34)
-				description = "Junior Detective";
-			else if (index == 35)
-				description = "Senior Detective";
+		Common::Array<Action::AgentControl> controls;
+		record->getAgentControls(controls);
+		for (const Action::AgentControl &control : controls) {
+			const Common::Rect screenRect = scene.getViewport().convertViewportToScreen(control.hotspot);
+			Common::JSONObject affordance;
+			affordance.setVal("id", new Common::JSONValue(Common::String::format("control_%u_%u_%s",
+				sceneInfo.sceneID, index, control.id.c_str())));
+			affordance.setVal("kind", new Common::JSONValue("puzzle_control"));
+			affordance.setVal("description", new Common::JSONValue(control.description));
+			affordance.setVal("record_type", new Common::JSONValue(record->getRecordTypeName()));
+			affordance.setVal("cursor", jsonInteger(CursorManager::kHotspot));
+			affordance.setVal("hotspot", jsonRect(control.hotspot));
+			affordance.setVal("screen_hotspot", jsonRect(screenRect));
+			affordance.setVal("visible", new Common::JSONValue(!screenRect.isEmpty()));
+			affordances.push_back(new Common::JSONValue(affordance));
 		}
-		Common::JSONObject affordance;
-		affordance.setVal("id", new Common::JSONValue(Common::String::format("hs_%u_%u", sceneInfo.sceneID, index)));
-		affordance.setVal("kind", new Common::JSONValue(cursorName(record->getHoverCursor())));
-		affordance.setVal("description", new Common::JSONValue(description));
-		affordance.setVal("record_type", new Common::JSONValue(record->getRecordTypeName()));
-		affordance.setVal("cursor", jsonInteger(record->getHoverCursor()));
-		affordance.setVal("hotspot", jsonRect(record->_hotspot));
-		affordance.setVal("screen_hotspot", jsonRect(screenRect));
-		affordance.setVal("visible", new Common::JSONValue(!screenRect.isEmpty()));
-		affordances.push_back(new Common::JSONValue(affordance));
 	}
 	root.setVal("affordances", new Common::JSONValue(affordances));
+
+	Common::JSONArray puzzleStates;
+	for (uint index = 0; index < records.size(); ++index) {
+		Action::ActionRecord *record = records[index];
+		if (!record || !record->_isActive || record->_isDone)
+			continue;
+		const Common::String state = record->getAgentState();
+		if (state.empty())
+			continue;
+		Common::JSONObject puzzle;
+		puzzle.setVal("id", new Common::JSONValue(Common::String::format("record_%u_%u", sceneInfo.sceneID, index)));
+		puzzle.setVal("record_type", new Common::JSONValue(record->getRecordTypeName()));
+		puzzle.setVal("state", new Common::JSONValue(state));
+		puzzleStates.push_back(new Common::JSONValue(puzzle));
+	}
+	root.setVal("puzzles", new Common::JSONValue(puzzleStates));
 
 	Common::JSONObject dialogue;
 	Common::JSONArray choices;
@@ -568,8 +605,15 @@ void AgentBridge::publishObservation(bool force) {
 	Common::Array<Action::ActionRecord *> &records = scene.getActionManager().getActionRecords();
 	for (uint i = 0; i < records.size(); ++i) {
 		Action::ActionRecord *record = records[i];
-		if (record && record->_isActive && !record->_isDone && record->_hasHotspot)
+		if (!record || !record->_isActive || record->_isDone)
+			continue;
+		if (record->_hasHotspot)
 			fingerprint += Common::String::format("|%u:%d:%s", i, (int)record->getHoverCursor(), record->_description.c_str());
+		fingerprint += record->getAgentState();
+		Common::Array<Action::AgentControl> controls;
+		record->getAgentControls(controls);
+		for (const Action::AgentControl &control : controls)
+			fingerprint += Common::String::format("|%u:%s:%s", i, control.id.c_str(), control.description.c_str());
 	}
 	for (const Common::String &line : scene.getTextbox().getTextLines())
 		fingerprint += line;
@@ -681,6 +725,33 @@ bool AgentBridge::queueActivation(uint recordIndex) {
 	return true;
 }
 
+bool AgentBridge::queueAgentControlActivation(uint recordIndex, const Common::String &controlID) {
+	State::Scene &scene = State::Scene::instance();
+	Common::Array<Action::ActionRecord *> &records = scene.getActionManager().getActionRecords();
+	if (recordIndex >= records.size())
+		return false;
+	Action::ActionRecord *record = records[recordIndex];
+	if (!record || !record->_isActive || record->_isDone)
+		return false;
+
+	Common::Array<Action::AgentControl> controls;
+	record->getAgentControls(controls);
+	for (const Action::AgentControl &control : controls) {
+		if (control.id != controlID || !control.hotspot.isValidRect())
+			continue;
+		const Common::Rect hotspot = scene.getViewport().convertViewportToScreen(control.hotspot);
+		if (hotspot.isEmpty())
+			return false;
+		NancyInput input;
+		input.mousePos = Common::Point(hotspot.left + hotspot.width() / 2,
+			hotspot.top + hotspot.height() / 2);
+		input.input = NancyInput::kLeftMouseButtonUp;
+		g_nancy->_input->queueSyntheticInput(input);
+		return true;
+	}
+	return false;
+}
+
 void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 	Common::JSONObject object = rootValue->asObject();
 	const Common::String requestID = jsonString(object, "request_id");
@@ -731,19 +802,40 @@ void AgentBridge::handleAction(Common::JSONValue *rootValue) {
 			State::Scene &scene = State::Scene::instance();
 			Common::Array<Action::ActionRecord *> &records = scene.getActionManager().getActionRecords();
 			int recordIndex = -1;
+			Common::String controlID;
 			for (uint i = 0; i < records.size(); ++i) {
 				if (target == Common::String::format("hs_%u_%u", scene.getSceneInfo().sceneID, i)) {
 					recordIndex = i;
 					break;
 				}
+				if (!records[i] || !records[i]->_isActive || records[i]->_isDone)
+					continue;
+				Common::Array<Action::AgentControl> controls;
+				records[i]->getAgentControls(controls);
+				for (const Action::AgentControl &control : controls) {
+					if (target == Common::String::format("control_%u_%u_%s",
+						scene.getSceneInfo().sceneID, i, control.id.c_str())) {
+						recordIndex = i;
+						controlID = control.id;
+						break;
+					}
+				}
+				if (!controlID.empty())
+					break;
 			}
-			if (recordIndex < 0 || !records[recordIndex] || !records[recordIndex]->_isActive ||
-				records[recordIndex]->_isDone || !records[recordIndex]->_hasHotspot) {
+			if (recordIndex < 0 || !records[recordIndex] || !records[recordIndex]->_isActive || records[recordIndex]->_isDone ||
+				(controlID.empty() && !records[recordIndex]->_hasHotspot)) {
 				sendError(requestID, "invalid_target", "Target is not a current active affordance");
 				delete rootValue;
 				return;
 			}
-			if (!queueActivation(recordIndex)) {
+			if (!controlID.empty()) {
+				if (!queueAgentControlActivation(recordIndex, controlID)) {
+					sendError(requestID, "invalid_target", "Puzzle control is not currently visible and clickable");
+					delete rootValue;
+					return;
+				}
+			} else if (!queueActivation(recordIndex)) {
 				_activationRecordIndex = recordIndex;
 				_activationPanRemaining = scene.getViewport().getFrameCount();
 				_actionInputQueued = false;
