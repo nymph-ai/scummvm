@@ -26,6 +26,7 @@
 #include "engines/nancy/action/actionmanager.h"
 #include "engines/nancy/action/actionrecord.h"
 #include "engines/nancy/action/conversation.h"
+#include "engines/nancy/action/secondarymovie.h"
 #include "engines/nancy/cursor.h"
 #include "engines/nancy/enginedata.h"
 #include "engines/nancy/input.h"
@@ -310,8 +311,10 @@ bool AgentBridge::isStableDecisionPoint() const {
 		return false;
 
 	State::Scene &scene = State::Scene::instance();
+	Action::PlaySecondaryMovie *activeMovie = scene.getActiveMovie();
 	if (scene.getState() != State::Scene::kRun || scene.isUIPrepActive() ||
-		scene.isRunningAd() || scene.getActiveMovie() || scene.getCellPhonePopup().isAgentBusy()) {
+		scene.isRunningAd() || (activeMovie && activeMovie->isAgentBusy()) ||
+		scene.getCellPhonePopup().isAgentBusy()) {
 		return false;
 	}
 
