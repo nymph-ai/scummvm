@@ -1818,8 +1818,12 @@ Common::String CellPhonePopup::getAgentState() const {
 }
 
 bool CellPhonePopup::isAgentBusy() const {
+	// Once the call has connected, the phone is only decoration around the
+	// conversation scene. ConversationSound owns the actual decision boundary
+	// (including any visible response choices), so keeping kConnected busy here
+	// would hide that boundary and leave the Talk action pending forever.
 	return _isVisible && (_screenState == kPlaceCall || _screenState == kWaitOutgoingRing ||
-		_screenState == kLookupContact || _screenState == kWaitPickup || _screenState == kConnected ||
+		_screenState == kLookupContact || _screenState == kWaitPickup ||
 		_screenState == kInvalidNumber || _screenState == kWaitInvalid);
 }
 
