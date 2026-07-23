@@ -90,6 +90,7 @@ public:
 	void execute() override;
 
 	bool getIsFinished() const { return _isFinished; }
+	bool isAgentBusy() const override { return _playerCursorAllowed == kNoPlayerCursorAllowed; }
 
 	Common::Path _videoName;
 	Common::Path _paletteName;
