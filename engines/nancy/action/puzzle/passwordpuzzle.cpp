@@ -252,6 +252,58 @@ void PasswordPuzzle::handleInput(NancyInput &input) {
 	}
 }
 
+void PasswordPuzzle::getAgentControls(Common::Array<AgentControl> &controls) const {
+	if (_state != kRun || _solveState != kNotSolved)
+		return;
+
+	if (_exitHotspot.isValidRect())
+		controls.push_back({"exit", "leave this text-entry puzzle", _exitHotspot});
+
+	for (char c = 'a'; c <= 'z'; ++c) {
+		controls.push_back(AgentControl(
+			Common::String::format("key_%c", c),
+			Common::String::format("type letter %c", c - ('a' - 'A')),
+			Common::KeyState((Common::KeyCode)(Common::KEYCODE_a + c - 'a'), c)
+		));
+	}
+	for (char c = '0'; c <= '9'; ++c) {
+		controls.push_back(AgentControl(
+			Common::String::format("key_%c", c),
+			Common::String::format("type digit %c", c),
+			Common::KeyState((Common::KeyCode)(Common::KEYCODE_0 + c - '0'), c)
+		));
+	}
+	controls.push_back(AgentControl(
+		"key_space", "type a space",
+		Common::KeyState(Common::KEYCODE_SPACE, ' ')
+	));
+	controls.push_back(AgentControl(
+		"backspace", "delete the last entered character",
+		Common::KeyState(Common::KEYCODE_BACKSPACE, 0)
+	));
+	controls.push_back(AgentControl(
+		"submit", "submit the current visible text field",
+		Common::KeyState(Common::KEYCODE_RETURN, '\r')
+	));
+}
+
+Common::String PasswordPuzzle::getAgentState() const {
+	const Common::String &raw = _passwordFieldIsActive ? _playerPasswordInput : _playerNameInput;
+	Common::String entered = raw;
+	if (!entered.empty() && entered.lastChar() == '-')
+		entered.deleteLastChar();
+
+	return Common::String::format(
+		"login text-entry puzzle; active field: %s; entered text: %s",
+		_passwordFieldIsActive ? "password" : "name",
+		entered.empty() ? "empty" : entered.c_str()
+	);
+}
+
+bool PasswordPuzzle::isAgentBusy() const {
+	return _state != kRun || _solveState != kNotSolved;
+}
+
 void PasswordPuzzle::drawText() {
 	_drawSurface.clear(g_nancy->_graphics->getTransColor());
 	const Graphics::Font *font = g_nancy->_graphics->getFont(_fontID);

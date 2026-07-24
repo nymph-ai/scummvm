@@ -39,6 +39,9 @@ public:
 	void execute() override;
 	void onPause(bool paused) override;
 	void handleInput(NancyInput &input) override;
+	void getAgentControls(Common::Array<AgentControl> &controls) const override;
+	Common::String getAgentState() const override;
+	bool isAgentBusy() const override;
 
 	uint16 _fontID = 0;
 	uint16 _cursorBlinkTime = 500;
