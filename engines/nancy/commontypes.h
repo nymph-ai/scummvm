@@ -24,6 +24,7 @@
 
 #include "common/rect.h"
 #include "common/array.h"
+#include "common/keyboard.h"
 #include "common/language.h"
 #include "common/path.h"
 #include "common/str.h"
@@ -37,13 +38,31 @@ namespace Nancy {
 
 class NancyEngine;
 
-// A currently visible, human-clickable control exposed by the structured
-// agent bridge. The rectangle is in screen coordinates unless the owning
-// ActionRecord documents that it is viewport-relative.
+// A currently available human-input control exposed by the structured agent
+// bridge. Pointer rectangles are in screen coordinates unless the owning
+// ActionRecord documents that they are viewport-relative. Keyboard controls
+// carry the same KeyState that ordinary event input would deliver.
 struct AgentControl {
+	enum InputType {
+		kPointerInput,
+		kKeyboardInput
+	};
+
+	AgentControl() : inputType(kPointerInput) {}
+	AgentControl(const Common::String &controlID, const Common::String &controlDescription,
+			const Common::Rect &controlHotspot) :
+		id(controlID), description(controlDescription), hotspot(controlHotspot),
+		inputType(kPointerInput) {}
+	AgentControl(const Common::String &controlID, const Common::String &controlDescription,
+			const Common::KeyState &controlKey) :
+		id(controlID), description(controlDescription), inputType(kKeyboardInput),
+		key(controlKey) {}
+
 	Common::String id;
 	Common::String description;
 	Common::Rect hotspot;
+	InputType inputType;
+	Common::KeyState key;
 };
 
 // The original engine used a large amount of #defines for numerical constants,

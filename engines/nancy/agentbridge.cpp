@@ -456,17 +456,21 @@ Common::String AgentBridge::buildObservationJSON() {
 		Common::Array<AgentControl> controls;
 		record->getAgentControls(controls);
 		for (const AgentControl &control : controls) {
-			const Common::Rect screenRect = scene.getViewport().convertViewportToScreen(control.hotspot);
+			const bool keyboardInput = control.inputType == AgentControl::kKeyboardInput;
+			const Common::Rect screenRect = keyboardInput
+				? Common::Rect()
+				: scene.getViewport().convertViewportToScreen(control.hotspot);
 			Common::JSONObject affordance;
 			affordance.setVal("id", new Common::JSONValue(Common::String::format("control_%u_%u_%s",
 				sceneInfo.sceneID, index, control.id.c_str())));
 			affordance.setVal("kind", new Common::JSONValue("puzzle_control"));
 			affordance.setVal("description", new Common::JSONValue(control.description));
 			affordance.setVal("record_type", new Common::JSONValue(record->getRecordTypeName()));
-			affordance.setVal("cursor", jsonInteger(CursorManager::kHotspot));
+			affordance.setVal("input", new Common::JSONValue(keyboardInput ? "keyboard" : "pointer"));
+			affordance.setVal("cursor", jsonInteger(keyboardInput ? CursorManager::kNormalArrow : CursorManager::kHotspot));
 			affordance.setVal("hotspot", jsonRect(control.hotspot));
 			affordance.setVal("screen_hotspot", jsonRect(screenRect));
-			affordance.setVal("visible", new Common::JSONValue(!screenRect.isEmpty()));
+			affordance.setVal("visible", new Common::JSONValue(keyboardInput || !screenRect.isEmpty()));
 			affordances.push_back(new Common::JSONValue(affordance));
 		}
 	}
@@ -830,8 +834,18 @@ bool AgentBridge::queueAgentControlActivation(uint recordIndex, const Common::St
 	Common::Array<AgentControl> controls;
 	record->getAgentControls(controls);
 	for (const AgentControl &control : controls) {
-		if (control.id != controlID || !control.hotspot.isValidRect())
+		if (control.id != controlID)
 			continue;
+		if (control.inputType == AgentControl::kKeyboardInput) {
+			NancyInput input;
+			input.mousePos = Common::Point(-1, -1);
+			input.input = 0;
+			input.otherKbdInput.push_back(control.key);
+			g_nancy->_input->queueSyntheticInput(input);
+			return true;
+		}
+		if (!control.hotspot.isValidRect())
+			return false;
 		const Common::Rect hotspot = scene.getViewport().convertViewportToScreen(control.hotspot);
 		if (hotspot.isEmpty())
 			return false;
