@@ -157,5 +157,79 @@ void InteractiveVideo::handleInput(NancyInput &input) {
 	}
 }
 
+void InteractiveVideo::getAgentControls(Common::Array<AgentControl> &controls) const {
+	if (_state != kRun || !_movieAR) {
+		return;
+	}
+
+	const int curFrame = _movieAR->_decoder.getCurFrame();
+	if (curFrame < 0) {
+		return;
+	}
+
+	for (const InteractiveFrame &frame : _frames) {
+		if (frame.frameID != curFrame) {
+			continue;
+		}
+
+		const Common::String subject = _videoName.empty() ? _description : _videoName.toString();
+		for (uint i = 0; i < frame.hotspots.size(); ++i) {
+			const Common::String description = frame.hotspots.size() == 1
+				? Common::String::format("interact with %s", subject.c_str())
+				: Common::String::format("interact with %s region %u", subject.c_str(), i + 1);
+			// Keep the id independent of the movie frame. Agent observations and
+			// decisions are slower than animation, while activation asks us for
+			// the current rectangle again immediately before synthesizing input.
+			controls.push_back(AgentControl(
+				Common::String::format("hotspot_%u", i),
+				description,
+				frame.hotspots[i].hotspot));
+		}
+
+		if (frame.triggerOnNoHotspot) {
+			// The authored human action is a click outside every listed hotspot.
+			// Pick a concrete point that is outside every authored rectangle so
+			// the synthesized click follows the same default branch.
+			const Common::Rect viewport = NancySceneState.getViewport().getBounds();
+			Common::Point backgroundPoint;
+			bool foundBackground = false;
+			for (int16 y = viewport.top; y < viewport.bottom && !foundBackground; ++y) {
+				for (int16 x = viewport.left; x < viewport.right; ++x) {
+					bool insideHotspot = false;
+					for (const InteractiveHotspot &hotspot : frame.hotspots) {
+						if (hotspot.hotspot.contains(x, y)) {
+							insideHotspot = true;
+							break;
+						}
+					}
+					if (!insideHotspot) {
+						backgroundPoint = Common::Point(x, y);
+						foundBackground = true;
+						break;
+					}
+				}
+			}
+			if (foundBackground) {
+				controls.push_back(AgentControl(
+					"background",
+					Common::String::format("interact with the background around %s", subject.c_str()),
+					Common::Rect(backgroundPoint.x, backgroundPoint.y,
+						backgroundPoint.x + 1, backgroundPoint.y + 1)));
+			}
+		}
+
+		return;
+	}
+}
+
+Common::String InteractiveVideo::getAgentState() const {
+	if (_state != kRun || !_movieAR) {
+		return Common::String();
+	}
+
+	const Common::String subject = _videoName.empty() ? _description : _videoName.toString();
+	return Common::String::format("interactive video %s", subject.c_str());
+}
+
 } // End of namespace Action
 } // End of namespace Nancy

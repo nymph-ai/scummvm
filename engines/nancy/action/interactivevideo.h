@@ -39,6 +39,9 @@ public:
 	void execute() override;
 
 	void handleInput(NancyInput &input) override;
+	void getAgentControls(Common::Array<AgentControl> &controls) const override;
+	Common::String getAgentState() const override;
+	bool isAgentBusy() const override { return _state != kRun; }
 
 protected:
 	Common::String getRecordTypeName() const override { return "InteractiveVideo"; }
